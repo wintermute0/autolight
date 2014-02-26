@@ -11,13 +11,30 @@ using namespace std;
 
 const BYTE VCP_CODE_BRIGHTNESS = 0x10;
 
+HWND GetActualDesktopWindow() {
+	HWND hDesktopWnd = GetDesktopWindow();
+	HWND hDefView = FindWindowEx(hDesktopWnd, NULL, _T("SHELLDLL_DefView"), NULL);
+	if (hDefView != NULL) {
+		return FindWindowEx(hDefView, NULL, _T("SysListView32"), NULL);
+	} else {
+		return FindWindowEx(hDesktopWnd, NULL, _T("WorkerW"), NULL);
+	}
+}
+
 bool IsFullScreenAppRunning() {
-	HWND hWnd = GetForegroundWindow();
 	RECT appBounds;
 	RECT rc;
-	GetWindowRect(GetDesktopWindow(), &rc);
 
-	if (hWnd != GetDesktopWindow() && hWnd != GetShellWindow()) {
+	// get foreground window
+	HWND hWnd = GetForegroundWindow();
+
+	// get the actual desktop window
+	HWND actualDesktopView = GetActualDesktopWindow();
+
+	// check whether full screen app is running
+	if (hWnd != NULL && hWnd != actualDesktopView) {
+		// get the size of desktop window as well as the foreground window
+		GetWindowRect(GetDesktopWindow(), &rc);
 		GetWindowRect(hWnd, &appBounds);
 		log_info("The bounds of the foreground window is %d x %d.", appBounds.right - appBounds.left, appBounds.bottom - appBounds.top);
 		return appBounds.bottom >= rc.bottom && appBounds.left <= rc.left && appBounds.right >= rc.right && appBounds.top <= rc.top;
