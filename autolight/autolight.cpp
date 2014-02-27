@@ -11,14 +11,35 @@ using namespace std;
 
 const BYTE VCP_CODE_BRIGHTNESS = 0x10;
 
-HWND GetActualDesktopWindow() {
-	HWND hDesktopWnd = GetDesktopWindow();
-	HWND hDefView = FindWindowEx(hDesktopWnd, NULL, _T("SHELLDLL_DefView"), NULL);
-	if (hDefView != NULL) {
-		return FindWindowEx(hDefView, NULL, _T("SysListView32"), NULL);
-	} else {
-		return FindWindowEx(hDesktopWnd, NULL, _T("WorkerW"), NULL);
+HWND g_hActualDesktopWindow;
+
+BOOL CALLBACK EnumWindowsProc(__in  HWND hWnd, __in  LPARAM lParam) {
+	int nMaxCount = 64;
+	WCHAR *wsClassName = new WCHAR[nMaxCount];
+	GetClassName(hWnd, wsClassName, nMaxCount);
+
+	// xp should be this case
+	if (_wcsicmp(_T("SHELLDLL_DefView"), wsClassName) == 0) {
+		log_info("Actual desktop window is %p", hWnd);
+		g_hActualDesktopWindow = hWnd;
+		return FALSE;
 	}
+
+	// vista and win7 should be this case
+	if (_wcsicmp(_T("WorkerW"), wsClassName) == 0) {
+		HWND hDefView = FindWindowEx(hWnd, NULL, _T("SHELLDLL_DefView"), NULL);
+		if (hDefView != NULL) {
+			log_info("Actual desktop window is %p", hWnd);
+			g_hActualDesktopWindow = hWnd;
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+void GetActualDesktopWindow() {
+	EnumWindows(EnumWindowsProc, NULL);
 }
 
 bool IsFullScreenAppRunning() {
@@ -28,11 +49,8 @@ bool IsFullScreenAppRunning() {
 	// get foreground window
 	HWND hWnd = GetForegroundWindow();
 
-	// get the actual desktop window
-	HWND actualDesktopView = GetActualDesktopWindow();
-
 	// check whether full screen app is running
-	if (hWnd != NULL && hWnd != actualDesktopView) {
+	if (hWnd != NULL && hWnd != g_hActualDesktopWindow) {
 		// get the size of desktop window as well as the foreground window
 		GetWindowRect(GetDesktopWindow(), &rc);
 		GetWindowRect(hWnd, &appBounds);
@@ -68,7 +86,7 @@ bool SetBrightness(DWORD wTargetBrightness) {
 	}
 
 	// for each physical monitor
-	for (int i = 0; i < dwPhysicalMonitorArraySize; i++) {
+	for (unsigned int i = 0; i < dwPhysicalMonitorArraySize; i++) {
 		// get physical monitor handle
 		HANDLE hPhysicalMonitor = pPhysicalMonitorArray[i].hPhysicalMonitor;
 
@@ -130,8 +148,13 @@ int _tmain(int argc, _TCHAR* argv[]) {
 	cout << "The app will going into background in 5 seconds." << endl;
 	cout << "Enjoy!" << endl;
 
+#ifdef NDEBUG
 	Sleep(5 * 1000);
 	FreeConsole();
+#endif
+
+	// get the actual desktop window
+	GetActualDesktopWindow();
 
 	// start check loop
 	DWORD dCurrentBrightness = -1;
